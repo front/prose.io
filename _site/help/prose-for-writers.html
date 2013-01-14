@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='UTF-8'/>
+  <title>Prose &middot; A Content Editor for GitHub</title>
+  <link rel='shortcut icon' href='/images/favicon.ico' type='image/x-icon' />
+  <link rel='stylesheet' href='/fonts/open-sans.css'>
+  <link rel='stylesheet' href='/app.css'>
+  <script name='header' type='text/html'><div class="navigation clearfix">
+  <a href='/' class='title'><span>Prose</span></a>
+
+  <% if (state.repo) { %>
+    <% var path = state.path %>
+
+    <a class="user" href="#<%= [state.user].join('/') %>"><%= state.user %></a>
+    <% if (state.repo) { %>
+      <a class="repo" href="#<%= [state.user, state.repo, 'tree', state.branch].join('/') %>">
+        <%= state.repo %>
+      </a>
+    <% } %>
+
+  <% } else { %>
+    <%= app.state.title %>
+  <% } %>
+
+  <div class='user-status<%= !window.authenticated ? " logged-out" : "" %>'>
+  <% if (window.authenticated) { %>
+    <%= app.username %> <a class="logout" href="#">Logout</a>
+  <% } else { %>
+      <a class="button" href="https://github.com/login/oauth/authorize?client_id=c602a8bd54b1e774f864&scope=repo,user,gist&redirect_uri=<%= encodeURIComponent(window.location.href) %>">Sign in using Github</a>
+  <% } %>
+  </div>
+  <% if (state.file) { %>
+    <a class="browse-files" href="#<%= [state.user, state.repo, 'tree', state.branch, state.path].join('/') %>">
+      Browse Files
+    </a>
+  <% } %>
+</div>
+</script>
+<script name='posts' type='text/html'><div class="search-menu-wrapper">
+  <div class="search-menu">
+    <div class="search"><input placeholder="Type to search" type="text" id="search_str"/></div>
+    <div class="results"><%= files.length %> Files</div>
+
+    <div class="actions">
+      <% if (window.authenticated) { %>
+        <a class='link new new-file' href='#<%= user %>/<%= repo %>/new/<%= branch %><%= path ? "/"+path : ""%>'>
+          New File
+        </a>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<div class='inner'>
+
+  <div class="breadcrumbs">
+    <div class="branch-wrapper">
+      <a class="branch" href="#<%= [user, repo, 'tree', branch].join('/') %>">
+        <%= branch %>
+      </a>
+
+      <% if (app.state.branches.length > 0) { %>
+        <a class="switch-branch" href="#<%= [user, repo, 'tree', branch].join('/') %>">
+          &nbsp;&nbsp;&nbsp;
+        </a>
+        <div class="branches">
+          <div class="inner-branches">
+            <div class="arrow-up"></div>
+            <% _.each(app.state.branches, function(branch) { %>
+              <a class="select-branch" href="#<%= [user, repo, 'tree', branch].join('/') %>"><%= branch %></a>
+            <% }); %>
+          </div>
+        </div>
+      <% } %>
+
+    </div>
+
+    <% _.each(_.chunkedPath(path), function(p) { %>
+      <div class="slash">/</div>
+      <a class="path" href="#<%= [user, repo, 'tree', branch, p.url].join('/') %>"><%= p.name %></a>
+    <% }); %>
+    <br class="clear"/>
+  </div>
+
+  <div class='post-listing prose clearfix'>
+
+    <div id="files">
+
+    </div>
+
+  </div>
+</div>
+</script>
+<script name='files' type='text/html'><% _.each(files, function(f, index) { %>
+  <% if (f.type === "tree") { %>
+    <!-- folders -->
+    <a class='link folder' href='#<%= user %>/<%= repo %>/tree/<%= branch %><%= f.path ? "/" +f.path : "" %>'>
+      <div class="filename"><%= f.path === _.parentPath(current_path) ? ".." : f.name %></div>
+    </a>
+  <% } else { %> 
+    <!-- files -->
+    <a class='link load-post toggle-view' href='#<%= user %>/<%= repo %>/edit/<%= branch %>/<%= f.path %>'>
+      <div class="filename"><%= f.name || 'Untitled' %></div>
+    </a>
+  <% } %>
+<% }); %></script>
+<script name='post' type='text/html'>
+<div class="document-menu">
+  <div class="document-menu-content">
+    
+    <div class="fl filename">
+      <input type="text" class="filepath" value="<%= _.filepath(path, file) %>"/>
+      <div class="state"></div>
+    </div>
+
+    <div class="fl confirm-label">
+      Commit your changes:
+    </div>
+
+    <div class="fr menu-item save-state">
+      <input type="text" class="commit-message" value="Updated."/>
+      <div class="state fl">
+        <% if (writeable) { %><a class='toggle-options button' href='#'>&nbsp;</a><% } %>
+        
+        <% if (window.authenticated) { %>
+          <a class='cancel-save button' href='#' title="ESC">X</a>
+          <a class='save button inactive' href='#' title="CTRL+S"><%= writeable ? "SAVE" : "SEND PATCH" %></a>
+        <% } %>
+      </div>
+    </div>
+    
+    <% if (markdown && window.authenticated) { %>
+      <% if (jekyll) { %><a class="toggle meta fr menu-item" href="#" title="CTRL+SHIFT+M">Metadata</a> <% } %>
+      <a data-view="preview" class='toggle view preview fr menu-item<%= preview ? " active" : "" %>' href='#' title="Use CTRL+SHIFT+Left/Right to navigate">Preview document</a>
+      <a data-view="compose" class='toggle view compose fr menu-item<%= !preview ? " active" : "" %>' title="Use CTRL+SHIFT+Left/Right to navigate" href='#'>Compose document</a>
+      <a data-view="cheatsheet" class="toggle view cheatsheet fr menu-item" href="#" title="Use CTRL+SHIFT+Left/Right to navigate">Markdown reference sheet</a>
+    <% } %>
+
+    <% if (!window.authenticated) { %>
+      <div class="patch-hint">Sign in with GitHub to contribute to this file.</div>
+    <% } %>
+
+    <div class="options">
+      <% if (jekyll && markdown) { %>
+        <div class="publish-state">
+          <input type="checkbox" id="post_published"<%= published ? ' checked="checked"' : ''%>/> Published
+        </div>
+      <% } %>
+      <div class="actions">
+        <a class="toggle delete button" href="#">Delete File</a>
+      </div>
+    </div>
+    <div class="status" title="Unpublished"></div>
+
+    <br class="clear"/>
+  </div>
+</div>
+
+
+<div class='inner clearfix'>  
+  <div class='document prose'>
+    <% if (jekyll) { %>
+      <div class="metadata">
+        <div class="metadata-content">
+          <div id="raw_metadata"></div>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="diff-wrapper">
+      <div class="diff">
+        
+      </div>
+    </div>
+
+    <div class="surface<%= preview ? " preview" : " compose" %>">
+      <div class="cheatsheet-wrapper">
+        <div class="content">
+
+<div class="left">
+<h2>Headers</h2>
+<pre>
+# Header 1
+## Header 2
+### Header 3
+</pre>
+
+<h2>Text Annotations</h2>
+
+<pre>
+*This text will be emphasized.*
+**This text will be strong.**
+Inline `code` in typewriter style
+</pre>
+
+<h2>Links</h2>
+
+<pre>
+[GitHub](http://github.com)
+</pre>
+
+<h2>Images</h2>
+
+<pre>
+![Alt text](/images/logo.png)
+</pre>
+
+<h2>Blockquotes</h2>
+
+<pre>
+William Zinser:
+
+> Writing is thinking on paper. (no-more)
+</pre>
+</div>
+
+<div class="right">
+
+<h2>Unordered Lists</h2>
+
+<pre>
+* Item 1
+* Item 2
+  * Item 2a
+  * Item 2b
+</pre>
+
+<h2>Ordered Lists</h2>
+
+<pre>
+1. Item 1
+2. Item 2
+   * Item 2a
+   * Item 2b
+</pre>
+
+
+<h2>Code Blocks</h2>
+<pre>
+Use 4 spaces indentation:
+
+    function identity(x) {
+      return x;
+    }
+</pre>
+</div>
+
+        </div>
+      </div>
+
+      <div class="content-wrapper">
+        <div class="content">
+          <div id="code"></div>
+        </div>
+      </div>
+
+      <div class="content-preview-wrapper">
+        <div class="content-preview"><div class='post-content'>
+          <%= markdown ? marked(content) : '' %>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</script>
+<script name='publish_status' type='text/html'>Included file 'templates/publish_status._' not found in _includes directory</script>
+<script name='start' type='text/html'><div class='start dialog clearfix'>
+  <% if (!authenticated) { %>
+    <div class="splash">
+      <h2>Prose</h2>
+
+      <div class="authorize">
+        <p>Prose is a content editor for GitHub, optimized for managing websites.</p>
+        <p><a href="/about.html">Learn more.</a></p>
+        <a class="button" href="https://github.com/login/oauth/authorize?client_id=c602a8bd54b1e774f864&scope=repo,user,gist">Authorize with GitHub</a>
+      </div>
+    </div>
+  <% } %>
+</div>
+
+<% if (authenticated) { %>
+  <% if (organizations.length) { %>
+    <h1>Organizations</h2>
+    <div class="organizations">
+    <% _.each(organizations, function(org) { %>
+      <a class="organization" href="#<%= org.login %>" title="<%= org.login %>"><img src="<%= org.avatar_url %>" width="80" height="80"/></a>
+    <% }); %>
+    </div>
+  <% } %>
+
+  <h1>Repositories</h2>
+  <% _.each(owners, function(repos, owner) { %>
+    <% if (Object.keys(owners).length > 1) { %>
+      <div class="owner"><a href="#<%= owner %>"><%= owner %></a>
+        <div class="repo-count">
+          <%= repos.length %> <%= repos.length > 1 ? "Repositories" : "Repository"%>
+        </div>
+      </div>
+    <% } %>
+    <div class="repos">
+        <% _.each(repos, function(r, index) { %>
+          <a title='edit' class="select-repo repo<%= r.private ? " private" : "" %>" data-user="<%= r.owner.login %>" data-repo="<%= r.name %>" href='#<%= r.owner.login %>/<%= r.name %>'>
+            <div class="name"><%= r.name %></div>
+          </a>
+        <% }); %>
+    </div>
+  <% }); %>
+<% } %></script>
+<script name='profile' type='text/html'><div id="profile_wrapper">
+  <div class="profile-header">
+    <div class="avatar"><img src="<%= user.avatar_url %>" width="80" height="80"/></div>
+    <div class="user">
+      <div class="username"><%= user.name || user.login %></div>
+      <div class="subtitle">as <a href="http://github.com/<%= user.login %>" target="_blank"><strong><%= user.login %></strong></a> since <%= new Date(user.created_at).toDateString() %></div>
+    </div>
+  </div>
+  <div class="profile-details">
+    <div class="info">
+      <div class="location">
+        <span class="label">Located in</span> <%= user.location %>
+      </div>
+      <% if (user.blog) { %>
+      <div class="url">
+        <span class="label">Website at</span> <a href="<%= user.blog %>" target="_blank"><%= user.blog %></a>
+      </div>
+      <% } %>
+      <% if (user.company) { %>
+        <div class="company">
+          <span class="label">Works at</span> <%= user.company %>
+        </div>
+      <% } %>
+    </div>
+    <div class="stats">
+      <% if (user.type == "User") { %>
+        <div class="item">
+          <a href="http://github.com/<%= user.login %>/followers" target="_blank">
+            <div class="count"><%= user.followers %></div>
+            <div class="label">Followers</div>
+          </a>
+        </div>
+      <% } else { %>
+        <div class="item">
+          <a href="http://github.com/<%= user.login %>/followers" target="_blank">
+           <div class="count"><%= user.followers %></div>
+           <div class="label">Followers</div>
+          </a>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<h1><%= repos.length %> Repositories</h2>
+
+<div class="repos">
+    <% _.each(repos, function(r, index) { %>
+      <a title='edit' class="select-repo repo" data-user="<%= r.owner.login %>" data-repo="<%= r.name %>" href='#<%= r.owner.login %>/<%= r.name %>'>
+        <div class="name"><%= r.name %></div>
+        <div class="branches hidden"></div>
+      </a>
+    <% }); %>
+</div></script>
+<script name='notification' type='text/html'><% if (!window.authenticated) { %>
+  <div class="notification <%= type %>">
+    Please login with your GitHub account to access that project.
+  </div>
+  <a class="button" href="https://github.com/login/oauth/authorize?client_id=c602a8bd54b1e774f864&scope=repo, user&redirect_uri=<%= encodeURIComponent(window.location.href) %>">Sign in</a>
+<% } else { %>
+  <div class="notification <%= type %>">
+    <%= message%> 
+  </div>
+  <a class="button" href="../">Go back </a>
+<% } %></script>
+  <script src='/boot.js'></script>
+  <script>
+    (function(config, models, views, routers, utils, templates) {
+      $(function() {
+        if (authenticate()) {
+          loadApplication(function(err, data) {
+
+            // Start the engines
+            window.app.instance = new views.Application({ el: '#container', model: data }).render();
+            if (err) return app.instance.notify('error', 'Error while loading data from Github. This might be a temporary issue. Please try again later.');
+
+          });
+        }
+      });
+    }).apply(this, window.args);
+  </script>
+</head>
+<body>
+  <div id='container'>
+    <div id='main'><div class="help post-content">
+  <div class="title">Prose for writers</div>
+  
+  <p><a href='http://prose.io'>Prose</a> is not only suitable for managing website content. You can use it as a full-featured writing environment too. It provides you a distraction-free writing experience, with a focus on content and structure. Also, you can share your work at any time or invite other people to collaborate on your document.</p>
+
+<p>Here&#8217;s what you need to get started.</p>
+
+<h2 id='create_a_new_github_repository'>Create a new GitHub Repository</h2>
+
+<p>This will be the home of your documents. Make sure there is at least one branch available. The easiest way to do it, is by creating a new GitHub Repository and initializing it with an empty README.</p>
+
+<p><img alt='Create a repository on GitHub' src='http://prose.io/images/screenshots/prose-for-writers/create-repository.png' /></p>
+
+<p>Keep in mind, this is a plain old GitHub repository, no Jekyll involved here.</p>
+
+<h2 id='start_writing'>Start writing</h2>
+
+<p>Open your fresh repository in prose and start writing your first document. To do so, click on &#8220;New File&#8221; enter some text in markdown and finally hit save.</p>
+
+<p><img alt='Start writing' src='http://prose.io/images/screenshots/prose-for-writers/start-writing.png' /></p>
+
+<h2 id='remember_every_change'>Remember every change</h2>
+
+<p>A full changeset is stored on every save. Thanks to git you can access older versions of your document using <a href='https://github.com/prose/documents/commits/master'>GitHub</a>. You can access the full commit history &#8230;</p>
+
+<p><img alt='Revisions' src='http://prose.io/images/screenshots/prose-for-writers/revisions.png' /></p>
+
+<p>or look at particular changesets.</p>
+
+<p><img alt='Changeset' src='http://prose.io/images/screenshots/prose-for-writers/changeset.png' /></p>
+
+<p>In future we&#8217;ll allow you to access revisions and changesets right from Prose. Just give us some more time please. :)</p>
+
+<h2 id='invite_collaborators'>Invite collaborators</h2>
+
+<p>If your co-workers or friends haven&#8217;t created a Github Account yet, this might be a good occasion to get started. Write permissions are totally transparent, and managed on GitHub. To invite collaborators you need to give them permission to your repository and send them the link to the document on Prose.</p>
+
+<p><img alt='Invite collaborators' src='http://prose.io/images/screenshots/prose-for-writers/add-collaborators.png' /></p>
+
+<h2 id='share_your_work'>Share your work</h2>
+
+<p>Make sure your repository is public and just share the URL of the <a href='http://prose.io/#prose/documents/blob/master/articles/hello-world.md'>post</a>. Readers will always see the most up to date version.</p>
+
+<p><img alt='Invite collaborators' src='http://prose.io/images/screenshots/prose-for-writers/share.png' /></p>
+
+<p>So if you or some of your collaborators make a change, it will immediately be visible. Just point them to the appropriate URL for either editing, or viewing the document.</p>
+
+<ul>
+<li><code>http://prose.io/#prose/documents/blob/master/articles/hello-world.md</code></li>
+
+<li><code>http://prose.io/#prose/documents/edit/master/articles/hello-world.md</code></li>
+</ul>
+
+<h2 id='organize_your_posts_in_folders'>Organize your posts in folders</h2>
+
+<p>You might want to structure your document repository, once you get more and more files. All you have to do is prefixing an arbitary folder structure to the filename. Make sure you don&#8217;t have a slash in front.</p>
+
+<p><img alt='Subfolders' src='http://prose.io/images/screenshots/prose-for-writers/subfolders.png' /></p>
+
+<h2 id='turn_it_into_a_website'>Turn it into a website</h2>
+
+<p>Remember that you always have the option to turn your document repository in a Jekyll website, featuring your own design. You can use our <a href='http://bootstrap.prose.io/'>template</a> to get started with Jekyll.</p>
+
+<p>However, before creating a website, you should have some content ready and with Prose it is easy to savely create and share that potential website content.</p>
+
+<h2 id='background'>Background</h2>
+
+<p>Prose is closely tied to Git and GitHub. We intentionally made the process transparent, and expose git concepts such as branches, folders and files. You can access every file either with Prose or the Github User interface. You can also switch to editing in your local text editor and use the regular git commit/push workflow, if you prefer that. E.g. when you&#8217;re on the road, and offline.</p>
+
+<h2 id='future_outlook'>Future outlook</h2>
+
+<ul>
+<li>Accessing revision history through the interface</li>
+
+<li>Invite collaborators right from the interface, and see who has access to the documents.</li>
+</ul>
+  <div class="meta"> Posted by <a href="http://twitter.com/_mql" target="_blank">Michael Aufreiter</a> on June 20, 2012 </div>
+</div>
+
+<div class="improve-article-wrapper">
+  <div class="improve-article">
+    <a class="button" href="http://prose.io/#prose/prose/edit/gh-pages/_posts/help/2012-06-20-prose-for-writers.md">Edit in Prose</a>
+    <p>
+      This article has been written and published using <a href="http://prose.io" target="_blank">Prose</a>. Please help us improve this documentation by contributing to the text.
+    </p>
+  </div>
+</div></div>
+  </div>
+
+  <div id='footer'>
+    <div class="footer-content">
+      <a class='help' href="/help.html">Help</a><a class='about' href="/about.html">About</a>
+      <div class="fr brand">
+        <a href="/#prose/prose/blob/gh-pages/README.md">Prose 0.4.0</a>
+      </div>
+   </div>
+  </div>
+</body>
+</html>
